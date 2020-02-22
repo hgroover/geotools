@@ -6,7 +6,24 @@
 import xml.etree.ElementTree as ET
 import math
 import sys
+from math import radians, cos, sin, asin, sqrt
 
+# Return haversine distance in miles
+def haversine(lat1, lon1, lat2, lon2):
+
+      R = 3959.87433 # this is in miles.  For Earth radius in kilometers use 6372.8 km
+
+      dLat = radians(lat2 - lat1)
+      dLon = radians(lon2 - lon1)
+      lat1 = radians(lat1)
+      lat2 = radians(lat2)
+
+      a = sin(dLat/2)**2 + cos(lat1)*cos(lat2)*sin(dLon/2)**2
+      c = 2*asin(sqrt(a))
+
+      return R * c
+
+version = '1.01'
 maxtime = 900
 if len(sys.argv) < 2:
    print 'Syntax: tour-splitter.py tourfile [maxtime]'
@@ -17,18 +34,18 @@ basename = sys.argv[1]
 if len(sys.argv) > 2:
    maxtime = float(sys.argv[2])
  
-print 'Parsing {}.kml, maximum time per segment = {}s'.format(basename, maxtime)
+print 'tour-splitter {} - parsing {}.kml, maximum time per segment = {}s'.format(version, basename, maxtime)
 
 tree = ET.parse(basename + '.kml')
 root = tree.getroot()
 
-print 'Parsed tree:'
+#print 'Parsed tree:'
 #print tree.tag
 #print tree.attrib
-print root.tag
+#print root.tag
 #print root.name
 #print root.description
-print root.attrib
+#print root.attrib
 preamble = '<?xml version="1.0" encoding="UTF-8"?>' + "\r\n"
 preamble = preamble + '<ns0:kml xmlns:ns0="http://www.opengis.net/kml/2.2" xmlns:ns1="http://www.google.com/kml/ext/2.2">' + "\r\n"
 preamble = preamble + "<ns1:Tour>\r\n"
@@ -52,17 +69,30 @@ for child2 in firstborn:
   else: 
      preamble = preamble + ET.tostring(child2)
      print child2.tag, child2.attrib, child2.text
-# Get total duration
+# Get total duration and distance
 totalTime = 0.0
+totalDistance = 0.0
+prevlat = 0
+prevlon = 0
 for child in playlist:
   if child.tag == '{http://www.google.com/kml/ext/2.2}FlyTo':
      duration = child.find('{http://www.google.com/kml/ext/2.2}duration')
      #print 'Fly to:', duration.text
      totalTime = totalTime + float(duration.text)
      #print ET.tostring(child)
+     # Find latitude and longitude within LookAt
+     lookat = child.find('{http://www.opengis.net/kml/2.2}LookAt')
+     lat = float(lookat.find('{http://www.opengis.net/kml/2.2}latitude').text)
+     lon = float(lookat.find('{http://www.opengis.net/kml/2.2}longitude').text)
+     if prevlat != 0:
+        distance = haversine( prevlat, prevlon, lat, lon )
+        totalDistance = totalDistance + distance
+     prevlat = lat
+     prevlon = lon
   else:
      print child.tag, child.text
 print 'Total duration (s):', totalTime
+print 'Total distance (m):', totalDistance
 if totalTime > maxtime:
   chunkFloat = totalTime / maxtime
   chunkRounded = math.floor(chunkFloat + 0.9999999)
